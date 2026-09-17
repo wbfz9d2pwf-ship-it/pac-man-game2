@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Pac-Man</title>
+
+<style>
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  color:#fff;
+  font-family:Arial,sans-serif;
+  touch-action:none;
+}
+
+body{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+#game{
+  width:min(96vw,700px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+#top{
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:5px 8px 8px;
+  font-weight:bold;
+  font-size:clamp(13px,3vw,20px);
+}
+
+#score{
+  color:#fff;
+}
+
+#level{
+  color:#ffd900;
+}
+
+#lives{
+  color:#ffd900;
+}
+
+canvas{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:72vh;
+  object-fit:contain;
+  background:#000;
+  border:2px solid #111;
+}
+
+#message{
+  height:34px;
+  margin-top:4px;
+  color:#ffd900;
+  font-weight:bold;
+  text-align:center;
+  font-size:clamp(13px,3.5vw,19px);
+}
+
+#controls{
+  margin-top:5px;
+  display:grid;
+  grid-template-columns:repeat(3,65px);
+  grid-template-rows:repeat(2,55px);
+  gap:5px;
+  justify-content:center;
+}
+
+.btn{
+  border:2px solid #555;
+  border-radius:12px;
+  background:#151515;
+  color:#fff;
+  font-size:27px;
+  font-weight:bold;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.btn:active{
+  background:#333;
+  transform:scale(.96);
+}
+
+#up{grid-column:2}
+#left{grid-column:1;grid-row:2}
+#down{grid-column:2;grid-row:2}
+#right{grid-column:3;grid-row:2}
+
+#menu{
+  position:fixed;
+  inset:0;
+  z-index:10;
+  background:#000;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+  padding:20px;
+}
+
+.menuBox{
+  width:min(92vw,520px);
+}
+
+.logo{
+  color:#ffd900;
+  font-size:clamp(54px,15vw,105px);
+  font-weight:bold;
+  letter-spacing:-7px;
+  text-shadow:
+    4px 4px 0 #000,
+    0 0 18px #ffdf00;
+  margin-bottom:8px;
+}
+
+.subtitle{
+  color:#fff;
+  font-size:18px;
+  margin-bottom:28px;
+}
+
+.start{
+  border:3px solid #ffd900;
+  background:#000;
+  color:#ffd900;
+  border-radius:12px;
+  padding:15px 35px;
+  font-size:22px;
+  font-weight:bold;
+}
+
+.start:active{
+  background:#ffd900;
+  color:#000;
+}
+
+.hint{
+  margin-top:20px;
+  color:#aaa;
+  font-size:13px;
+}
+
+@media(max-height:650px){
+  #controls{
+    grid-template-rows:45px 45px;
+  }
+
+  .btn{
+    height:45px;
+  }
+
+  #message{
+    height:22px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+  <div class="menuBox">
+    <div class="logo">PAC-MAN</div>
+    <div class="subtitle">RETRO ARCADE</div>
+    <button class="start" id="start">▶ JOUER</button>
+    <div class="hint">
+      Flèches du clavier ou boutons tactiles
+    </div>
+  </div>
+</div>
+
+<div id="game">
+
+  <div id="top">
+    <div>SCORE : <span id="score">0</span></div>
+    <div>NIVEAU <span id="level">1</span></div>
+    <div><span id="lives">●●●</span></div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <div id="message"></div>
+
+  <div id="controls">
+    <button class="btn" id="up">▲</button>
+    <button class="btn" id="left">◀</button>
+    <button class="btn" id="down">▼</button>
+    <button class="btn" id="right">▶</button>
+  </div>
+
+</div>
+
+<script>
+/* =========================================================
+   PAC-MAN RETRO
+   ========================================================= */
+
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+
+const scoreEl=document.getElementById("score");
+const levelEl=document.getElementById("level");
+const livesEl=document.getElementById("lives");
+const messageEl=document.getElementById("message");
+const menu=document.getElementById("menu");
+const startBtn=document.getElementById("start");
+
+/* ---------------------------------------------------------
+   LABYRINTHE
+   --------------------------------------------------------- */
+
+const MAP=[
+"#####################",
+"#.........#.........#",
+"#.###.###.#.###.###.#",
+"#o###.###.#.###.###o#",
+"#...................#",
+"#.###.#.#######.#.###",
+"#.....#...#...#.#.....",
+"#####.###.#.#.###.####",
+"    #.#...P...#.#    ",
+"#####.#.## ##.#.#####",
+"     .#.#GGG#.#.     ",
+"#####.#.#   #.#.#####",
+"    #.#.#####.#.#    ",
+"#.....#...#...#.#.....",
+"#.###.#.###.###.#.###",
+"#o..#...........#..o#",
+"###.#.#.#######.#.#.#",
+"#.....#....#....#.....",
+"#.########.#.#########",
+"#.....................#",
+"#####################"
+];
+
+const TILE=24;
+const ROWS=MAP.length;
+const COLS=MAP[0].length;
+
+canvas.width=COLS*TILE;
+canvas.height=ROWS*TILE;
+
+/* ---------------------------------------------------------
+   AUDIO
+   --------------------------------------------------------- */
+
+let audioCtx=null;
+let musicTimer=null;
+let musicStep=0;
+
+function audioStart(){
+  if(!audioCtx){
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  }
+
+  if(audioCtx.state==="suspended"){
+    audioCtx.resume();
+  }
+}
+
+function tone(freq,duration,type="square",volume=.04){
+  if(!audioCtx)return;
+
+  const osc=audioCtx.createOscillator();
+  const gain=audioCtx.createGain();
+
+  osc.type=type;
+  osc.frequency.value=freq;
+  gain.gain.value=volume;
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  const now=audioCtx.currentTime;
+
+  gain.gain.setValueAtTime(volume,now);
+  gain.gain.exponentialRampToValueAtTime(.001,now+duration);
+
+  osc.start(now);
+  osc.stop(now+duration);
+}
+
+function eatSound(){
+  tone(620,.045,"square",.035);
+}
+
+function powerSound(){
+  tone(260,.12,"square",.05);
+  setTimeout(()=>tone(520,.12,"square",.04),80);
+}
+
+function deathSound(){
+  const notes=[500,420,350,280,220];
+  notes.forEach((n,i)=>{
+    setTimeout(()=>tone(n,.13,"square",.05),i*100);
+  });
+}
+
+function ghostSound(){
+  tone(900,.05,"square",.035);
+}
+
+/* petite musique rétro originale générée */
+const melody=[
+  262,330,392,330,
+  294,349,440,349,
+  262,330,392,523,
+  440,392,330,294
+];
+
+function startMusic(){
+  if(musicTimer)return;
+
+  musicTimer=setInterval(()=>{
+    if(!audioCtx)return;
+
+    tone(
+      melody[musicStep%melody.length],
+      .10,
+      "square",
+      .018
+    );
+
+    musicStep++;
+  },150);
+}
+
+function stopMusic(){
+  clearInterval(musicTimer);
+  musicTimer=null;
+}
+
+/* ---------------------------------------------------------
+   ETAT DU JEU
+   --------------------------------------------------------- */
+
+let grid=[];
+let score=0;
+let level=1;
+let lives=3;
+let running=false;
+let paused=false;
+let powerTimer=0;
+let frightened=false;
+let pelletsLeft=0;
+
+let pacman;
+let ghosts=[];
+
+const DIRS={
+  left:{x:-1,y:0},
+  right:{x:1,y:0},
+  up:{x:0,y:-1},
+  down:{x:0,y:1}
+};
+
+/* ---------------------------------------------------------
+   CREATION DU NIVEAU
+   --------------------------------------------------------- */
+
+function buildGrid(){
+
+  grid=MAP.map(row=>row.split(""));
+
+  pelletsLeft=0;
+
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+
+      if(grid[y][x]==="."){
+        pelletsLeft++;
+      }
+
+      if(grid[y][x]==="o"){
+        pelletsLeft++;
+      }
+
+      if(grid[y][x]==="P"){
+        pacman={
+          x:x,
+          y:y,
+          dir:{x:0,y:0},
+          next:{x:0,y:0},
+          mouth:0
+        };
+
+        grid[y][x]=" ";
+      }
+    }
+  }
+
+  ghosts=[
+    {
+      x:10,
+      y:10,
+      color:"#ff0000",
+      dir:{x:-1,y:0},
+      startX:10,
+      startY:10
+    },
+    {
+      x:9,
+      y:10,
+      color:"#ffb8ff",
+      dir:{x:1,y:0},
+      startX:9,
+      startY:10
+    },
+    {
+      x:11,
+      y:10,
+      color:"#00ffff",
+      dir:{x:-1,y:0},
+      startX:11,
+      startY:10
+    },
+    {
+      x:10,
+      y:9,
+      color:"#ffb852",
+      dir:{x:1,y:0},
+      startX:10,
+      startY:9
+    }
+  ];
+
+  powerTimer=0;
+}
+
+/* ---------------------------------------------------------
+   COLLISIONS
+   --------------------------------------------------------- */
+
+function wall(x,y){
+
+  if(y<0||y>=ROWS||x<0||x>=COLS)return true;
+
+  return grid[y][x]==="#";
+}
+
+function canMove(x,y,dir){
+
+  const nx=x+dir.x;
+  const ny=y+dir.y;
+
+  return !wall(nx,ny);
+}
+
+/* ---------------------------------------------------------
+   DIRECTION
+   --------------------------------------------------------- */
+
+function setDirection(dir){
+
+  if(!running)return;
+
+  pacman.next={...dir};
+
+  if(canMove(pacman.x,pacman.y,dir)){
+    pacman.dir={...dir};
+  }
+}
+
+/* ---------------------------------------------------------
+   PAC-MAN
+   --------------------------------------------------------- */
+
+let tick=0;
+
+function movePacman(){
+
+  if(canMove(pacman.x,pacman.y,pacman.next)){
+    pacman.dir={...pacman.next};
+  }
+
+  if(canMove(pacman.x,pacman.y,pacman.dir)){
+
+    pacman.x+=pacman.dir.x;
+    pacman.y+=pacman.dir.y;
+
+    eatPellet();
+  }
+
+  pacman.mouth+=.45;
+}
+
+function eatPellet(){
+
+  const cell=grid[pacman.y][pacman.x];
+
+  if(cell==="."){
+
+    grid[pacman.y][pacman.x]=" ";
+    score+=10;
+    pelletsLeft--;
+
+    eatSound();
+
+  }else if(cell==="o"){
+
+    grid[pacman.y][pacman.x]=" ";
+    score+=50;
+    pelletsLeft--;
+
+    powerTimer=70;
+    frightened=true;
+
+    powerSound();
+  }
+
+  scoreEl.textContent=score;
+
+  if(pelletsLeft<=0){
+    nextLevel();
+  }
+}
+
+/* ---------------------------------------------------------
+   FANTÔMES
+   --------------------------------------------------------- */
+
+function possibleDirections(g){
+
+  const dirs=[];
+
+  for(const key in DIRS){
+
+    const d=DIRS[key];
+
+    if(d.x===-g.dir.x && d.y===-g.dir.y)continue;
+
+    if(canMove(g.x,g.y,d)){
+      dirs.push(d);
+    }
+  }
+
+  return dirs;
+}
+
+function distance(a,b){
+  return Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+}
+
+function moveGhost(g,index){
+
+  const possible=possibleDirections(g);
+
+  if(possible.length===0){
+    g.dir={x:-g.dir.x,y:-g.dir.y};
+    return;
+  }
+
+  /* Décision dans les intersections */
+  if(
+    !canMove(g.x,g.y,g.dir) ||
+    possible.length>1 && Math.random()<.25
+  ){
+
+    if(frightened){
+
+      g.dir=
+        possible[Math.floor(Math.random()*possible.length)];
+
+    }else{
+
+      let target=pacman;
+
+      /* comportement légèrement différent pour chaque fantôme */
+
+      if(index===1){
+        target={
+          x:pacman.x+pacman.dir.x*4,
+          y:pacman.y+pacman.dir.y*4
+        };
+      }
+
+      if(index===2){
+        target={
+          x:pacman.x+pacman.dir.x*6,
+          y:pacman.y+pacman.dir.y*6
+        };
+      }
+
+      if(index===3 && Math.random()<.4){
+        target={
+          x:Math.floor(Math.random()*COLS),
+          y:Math.floor(Math.random()*ROWS)
+        };
+      }
+
+      let best=possible[0];
+      let bestDist=Infinity;
+
+      for(const d of possible){
+
+        const nx=g.x+d.x;
+        const ny=g.y+d.y;
+
+        const dist=
+          Math.abs(nx-target.x)+
+          Math.abs(ny-target.y);
+
+        if(dist<bestDist){
+          bestDist=dist;
+          best=d;
+        }
+      }
+
+      g.dir=best;
+    }
+  }
+
+  if(canMove(g.x,g.y,g.dir)){
+    g.x+=g.dir.x;
+    g.y+=g.dir.y;
+  }
+}
+
+/* ---------------------------------------------------------
+   COLLISION PAC-MAN / FANTÔME
+   --------------------------------------------------------- */
+
+function checkGhostCollision(){
+
+  for(const g of ghosts){
+
+    if(
+      Math.abs(g.x-pacman.x)<1 &&
+      Math.abs(g.y-pacman.y)<1
+    ){
+
+      if(frightened){
+
+        score+=200;
+        scoreEl.textContent=score;
+
+        g.x=g.startX;
+        g.y=g.startY;
+
+        ghostSound();
+
+      }else{
+
+        loseLife();
+        return;
+      }
+    }
+  }
+}
+
+/* ---------------------------------------------------------
+   VIES
+   --------------------------------------------------------- */
+
+function updateLives(){
+
+  livesEl.textContent="●".repeat(Math.max(0,lives));
+}
+
+function loseLife(){
+
+  lives--;
+  updateLives();
+
+  deathSound();
+
+  running=false;
+
+  messageEl.textContent=
+    lives>0 ? "PERDU ! 💥" : "GAME OVER";
+
+  setTimeout(()=>{
+
+    if(lives<=0){
+
+      menu.style.display="flex";
+      messageEl.textContent="";
+      stopMusic();
+
+    }else{
+
+      resetPositions();
+      running=true;
+    }
+
+  },1200);
+}
+
+function resetPositions(){
+
+  pacman.x=10;
+  pacman.y=8;
+  pacman.dir={x:0,y:0};
+  pacman.next={x:0,y:0};
+
+  ghosts.forEach(g=>{
+    g.x=g.startX;
+    g.y=g.startY;
+  });
+}
+
+/* ---------------------------------------------------------
+   NIVEAU
+   --------------------------------------------------------- */
+
+function nextLevel(){
+
+  level++;
+
+  levelEl.textContent=level;
+
+  messageEl.textContent="NIVEAU "+level+" !";
+
+  setTimeout(()=>{
+
+    buildGrid();
+    messageEl.textContent="";
+    running=true;
+
+  },900);
+}
+
+/* ---------------------------------------------------------
+   DESSIN DU LABYRINTHE
+   --------------------------------------------------------- */
+
+function drawMaze(){
+
+  ctx.fillStyle="#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  for(let y=0;y<ROWS;y++){
+
+    for(let x=0;x<COLS;x++){
+
+      const cell=grid[y][x];
+      const px=x*TILE;
+      const py=y*TILE;
+
+      if(cell==="#"){
+
+        ctx.fillStyle="#1010c8";
+        ctx.fillRect(px,py,TILE,TILE);
+
+        ctx.strokeStyle="#3030ff";
+        ctx.lineWidth=2;
+
+        ctx.strokeRect(
+          px+2,
+          py+2,
+          TILE-4,
+          TILE-4
+        );
+
+      }else if(cell==="."){
+
+        ctx.fillStyle="#fff";
+        ctx.beginPath();
+        ctx.arc(
+          px+TILE/2,
+          py+TILE/2,
+          2.3,
+          0,
+          Math.PI*2
+        );
+        ctx.fill();
+
+      }else if(cell==="o"){
+
+        ctx.fillStyle="#fff";
+        ctx.beginPath();
+        ctx.arc(
+          px+TILE/2,
+          py+TILE/2,
+          6,
+          0,
+          Math.PI*2
+        );
+        ctx.fill();
+      }
+    }
+  }
+}
+
+/* ---------------------------------------------------------
+   DESSIN PAC-MAN
+   --------------------------------------------------------- */
+
+function drawPacman(){
+
+  const cx=pacman.x*TILE+TILE/2;
+  const cy=pacman.y*TILE+TILE/2;
+
+  let angle=0;
+
+  if(pacman.dir.x===-1)angle=Math.PI;
+  if(pacman.dir.y===-1)angle=-Math.PI/2;
+  if(pacman.dir.y===1)angle=Math.PI/2;
+
+  const mouth=
+    .20+
+    Math.abs(Math.sin(pacman.mouth))*.25;
+
+  ctx.fillStyle="#ffff00";
+
+  ctx.beginPath();
+
+  ctx.moveTo(cx,cy);
+
+  ctx.arc(
+    cx,
+    cy,
+    TILE*.43,
+    angle+mouth,
+    angle+Math.PI*2-mouth
+  );
+
+  ctx.closePath();
+  ctx.fill();
+}
+
+/* ---------------------------------------------------------
+   DESSIN FANTÔMES
+   --------------------------------------------------------- */
+
+function drawGhost(g){
+
+  const cx=g.x*TILE+TILE/2;
+  const cy=g.y*TILE+TILE/2;
+  const r=TILE*.42;
+
+  let color=g.color;
+
+  if(frightened){
+
+    color=
+      powerTimer<20 &&
+      Math.floor(powerTimer/3)%2===0
+      ? "#fff"
+      : "#1645ff";
+  }
+
+  ctx.fillStyle=color;
+
+  ctx.beginPath();
+
+  ctx.arc(
+    cx,
+    cy-r*.1,
+    r,
+    Math.PI,
+    0
+  );
+
+  ctx.lineTo(cx+r,cy+r);
+
+  ctx.lineTo(cx+r*.5,cy+r*.55);
+  ctx.lineTo(cx,cy+r);
+  ctx.lineTo(cx-r*.5,cy+r*.55);
+  ctx.lineTo(cx-r,cy+r);
+
+  ctx.closePath();
+  ctx.fill();
+
+  /* yeux */
+
+  ctx.fillStyle="#fff";
+
+  ctx.beginPath();
+  ctx.arc(cx-r*.35,cy-r*.15,r*.25,0,Math.PI*2);
+  ctx.arc(cx+r*.35,cy-r*.15,r*.25,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle="#111";
+
+  ctx.beginPath();
+  ctx.arc(cx-r*.3,cy-r*.12,r*.11,0,Math.PI*2);
+  ctx.arc(cx+r*.3,cy-r*.12,r*.11,0,Math.PI*2);
+  ctx.fill();
+}
+
+/* ---------------------------------------------------------
+   BOUCLE
+   --------------------------------------------------------- */
+
+function update(){
+
+  if(!running)return;
+
+  tick++;
+
+  /*
+   vitesse du joueur
+   */
+
+  if(tick%5===0){
+    movePacman();
+  }
+
+  /*
+   fantômes
+   */
+
+  if(tick%7===0){
+
+    ghosts.forEach((g,i)=>{
+      moveGhost(g,i);
+    });
+
+    checkGhostCollision();
+  }
+
+  if(powerTimer>0){
+
+    powerTimer--;
+
+    if(powerTimer<=0){
+      frightened=false;
+    }
+  }
+}
+
+function draw(){
+
+  drawMaze();
+  drawPacman();
+
+  ghosts.forEach(drawGhost);
+}
+
+function loop(){
+
+  update();
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+/* ---------------------------------------------------------
+   CLAVIER
+   --------------------------------------------------------- */
+
+document.addEventListener("keydown",e=>{
+
+  const keys={
+    ArrowUp:"up",
+    ArrowDown:"down",
+    ArrowLeft:"left",
+    ArrowRight:"right",
+    w:"up",
+    W:"up",
+    s:"down",
+    S:"down",
+    a:"left",
+    A:"left",
+    d:"right",
+    D:"right"
+  };
+
+  if(keys[e.key]){
+
+    e.preventDefault();
+
+    setDirection(DIRS[keys[e.key]]);
+  }
+});
+
+/* ---------------------------------------------------------
+   TOUCHES
+   --------------------------------------------------------- */
+
+function button(id,dir){
+
+  const el=document.getElementById(id);
+
+  const action=e=>{
+
+    e.preventDefault();
+
+    audioStart();
+
+    setDirection(DIRS[dir]);
+  };
+
+  el.addEventListener("touchstart",action,{passive:false});
+  el.addEventListener("mousedown",action);
+}
+
+button("up","up");
+button("down","down");
+button("left","left");
+button("right","right");
+
+/* ---------------------------------------------------------
+   DÉMARRAGE
+   --------------------------------------------------------- */
+
+startBtn.addEventListener("click",()=>{
+
+  audioStart();
+
+  menu.style.display="none";
+
+  score=0;
+  level=1;
+  lives=3;
+
+  scoreEl.textContent=score;
+  levelEl.textContent=level;
+
+  updateLives();
+
+  buildGrid();
+
+  running=true;
+
+  startMusic();
+});
+
+buildGrid();
+draw();
+loop();
+
+</script>
+
+</body>
+</html>
